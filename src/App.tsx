@@ -1,128 +1,105 @@
-import "./styles.css";
+import { useEffect, useMemo, useState } from "react";
+import { useCarpets } from "./useCarpets";
+import { COLOR_CARDS } from "./utils";
+import { CarpetSidebar, carpetStatus } from "./components/CarpetSidebar";
+import { CarpetDetail } from "./components/CarpetDetail";
 
-const project = {
-  "sourceNo": 2,
-  "id": "hxyfront-62009",
-  "port": 62009,
-  "title": "地毯修复纹样档案",
-  "domain": "手工地毯修复",
-  "prompt": "做一个给手工地毯修复工作室使用的纹样与修复档案前端项目，可以记录地毯产地、年代、结密度、材质、染色类型、破损区域、补线颜色和修复工序。页面需要有纹样局部标记图、修复前后记录、材料色卡、工序进度和按产地筛选的档案列表。",
-  "palette": [
-    "#7c2d12",
-    "#b45309",
-    "#0f766e"
-  ],
-  "metrics": [
-    "待修复",
-    "纹样档案",
-    "色卡数量",
-    "完工率"
-  ],
-  "filters": [
-    "波斯",
-    "安纳托利亚",
-    "高加索",
-    "藏毯"
-  ],
-  "fields": [
-    "地毯产地",
-    "年代",
-    "结密度",
-    "材质",
-    "染色类型",
-    "破损区域"
-  ],
-  "records": [
-    [
-      "CAR-092",
-      "波斯",
-      "羊毛，约1960s",
-      "边缘磨损待补线"
-    ],
-    [
-      "CAR-117",
-      "安纳托利亚",
-      "植物染，结密度42",
-      "中心纹样缺口"
-    ],
-    [
-      "CAR-138",
-      "藏毯",
-      "局部褪色",
-      "需匹配靛蓝色卡"
-    ]
-  ]
-};
+const ORIGIN_FILTERS = ["波斯", "安纳托利亚", "高加索", "藏毯"];
 
-function App() {
+export default function App() {
+  const {
+    carpets,
+    recordMeasurement,
+    completeStep,
+    confirmReview,
+    addMark,
+    updateMark,
+    removeMark,
+    reset,
+  } = useCarpets();
+  const [selectedId, setSelectedId] = useState<string>(carpets[0]?.id ?? "");
+  const [filter, setFilter] = useState<string>("全部");
+
+  useEffect(() => {
+    if (!carpets.some((c) => c.id === selectedId)) {
+      setSelectedId(carpets[0]?.id ?? "");
+    }
+  }, [carpets, selectedId]);
+
+  const selected = useMemo(
+    () => carpets.find((c) => c.id === selectedId) ?? carpets[0],
+    [carpets, selectedId]
+  );
+
+  const metrics = useMemo(() => {
+    const total = carpets.length;
+    const done = carpets.filter((c) => carpetStatus(c) === "done").length;
+    const pending = carpets.filter((c) => carpetStatus(c) === "pending").length;
+    const repairing = total - done;
+    const rate = total ? Math.round((done / total) * 100) : 0;
+    return [
+      { label: "待修复", value: repairing },
+      { label: "纹样档案", value: total },
+      { label: "色卡数量", value: COLOR_CARDS.length },
+      { label: "完工率", value: `${rate}%` },
+      { label: "待复核", value: pending },
+    ];
+  }, [carpets]);
+
   return (
     <main className="app">
       <section className="hero">
-        <p>{project.id} · 源提示词{project.sourceNo} · Port {project.port}</p>
-        <h1>{project.title}</h1>
-        <span>{project.prompt}</span>
+        <p>hxyfront-62009 · 地毯修复纹样档案</p>
+        <h1>按工序实测尺寸档案</h1>
+        <span>
+          湿洗、拉伸后尺寸常变，师傅不再照档案最早尺寸圈破损、算补线。每道工序按实测尺寸记档，
+          尺寸一更新即重算圈选与色卡领用补线长度；已完工工序保留当时尺寸与用线量，两次量差超过登记公差则挂待复核，师傅确认前不往下走工序。
+        </span>
       </section>
 
       <section className="metrics">
-        {project.metrics.map((metric: string, index: number) => (
-          <article key={metric}>
-            <small>{metric}</small>
-            <strong>{[28, 6, 14, 91][index] ?? 10}</strong>
+        {metrics.map((m) => (
+          <article key={m.label}>
+            <small>{m.label}</small>
+            <strong>{m.value}</strong>
           </article>
         ))}
       </section>
 
-      <section className="workspace">
-        <aside className="panel">
-          <h2>{project.domain}分类</h2>
-          <div className="chips">
-            {project.filters.map((item: string) => (
-              <button key={item}>{item}</button>
-            ))}
-          </div>
-        </aside>
+      <div className="workspace">
+        <CarpetSidebar
+          carpets={carpets}
+          selectedId={selected?.id ?? ""}
+          filter={filter}
+          filters={ORIGIN_FILTERS}
+          onFilterChange={setFilter}
+          onSelect={setSelectedId}
+        />
+        {selected ? (
+          <CarpetDetail
+            key={selected.id}
+            carpet={selected}
+            onRecord={(stepKey, l, w, complete, note) =>
+              recordMeasurement(selected.id, stepKey, l, w, complete, note)
+            }
+            onComplete={(stepKey) => completeStep(selected.id, stepKey)}
+            onConfirm={() => confirmReview(selected.id)}
+            onAddMark={(mark) => addMark(selected.id, mark)}
+            onUpdateMark={(markId, patch) =>
+              updateMark(selected.id, markId, patch)
+            }
+            onRemoveMark={(markId) => removeMark(selected.id, markId)}
+          />
+        ) : (
+          <section className="panel detail">
+            <p className="empty">暂无档案</p>
+          </section>
+        )}
+      </div>
 
-        <section className="panel form-panel">
-          <div className="heading">
-            <div>
-              <p>专业字段</p>
-              <h2>新增记录</h2>
-            </div>
-            <button className="primary">保存记录</button>
-          </div>
-          <div className="field-grid">
-            {project.fields.map((field: string) => (
-              <label key={field}>
-                <span>{field}</span>
-                <input placeholder={"填写" + field} />
-              </label>
-            ))}
-          </div>
-        </section>
-      </section>
-
-      <section className="panel">
-        <div className="heading">
-          <div>
-            <p>近期记录</p>
-            <h2>工作台摘要</h2>
-          </div>
-          <button>导出CSV</button>
-        </div>
-        <div className="records">
-          {project.records.map((record: string[], index: number) => (
-            <article key={record.join("-")}>
-              <b>{String(index + 1).padStart(2, "0")}</b>
-              <div>
-                <h3>{record[0]}</h3>
-                <p>{record.slice(1).join(" · ")}</p>
-              </div>
-            </article>
-          ))}
-        </div>
-      </section>
+      <div className="reset-row">
+        <button onClick={reset}>重置演示数据</button>
+      </div>
     </main>
   );
 }
-
-export default App;
